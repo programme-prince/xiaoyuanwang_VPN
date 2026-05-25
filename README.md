@@ -54,14 +54,21 @@ Windows 默认同时连两个网络时会随机或按优先级走，我们需要
 
 ```
 xiaoyuanwang_VPN/
-├── settings.ps1          ← 【配置文件】填入你自己的 IP 地址（被 .gitignore 忽略，不上传）
+├── settings.ps1          ← 【配置文件】填入你自己的 IP（被 .gitignore 忽略，不上传）
 ├── settings.example.ps1  ← 【配置模板】复制为 settings.ps1 后填入自己的 IP
-├── fix_routes.ps1        ← 【配置脚本】设置跃点数 + 加路由（以管理员身份运行）
-├── restore.ps1           ← 【还原脚本】一键还原所有设置（以管理员身份运行）
-├── monitor.bat           ← 【监控脚本】实时查看网络走向（双击运行，Ctrl+C 退出）
-├── check_network.bat     ← 【检测脚本】快速看一眼默认路由（双击运行）
+├── fix_routes.ps1        ← 【配置脚本】设置跃点数 + 加路由
+├── restore.ps1           ← 【还原脚本】一键还原所有设置
+├── monitor.ps1           ← 【监控脚本】实时查看网络走向（Ctrl+C 退出）
+├── check_network.ps1     ← 【检测脚本】快速看一眼默认路由
 ├── .gitignore
 └── README.md
+```
+
+所有脚本统一用以下方式运行（以管理员身份打开 PowerShell）：
+
+```powershell
+cd 脚本所在目录
+powershell -ExecutionPolicy Bypass -File .\脚本名.ps1
 ```
 
 ---
@@ -91,7 +98,7 @@ $CAMPUS_SUBNET = "YOUR_CAMPUS_SUBNET"
 Wi-Fi    → 连手机热点（不要连校园 Wi-Fi）
 ```
 
-### 第三步：以管理员身份运行 PowerShell
+### 第三步：运行 fix_routes.ps1
 
 按 `Win` 键 → 输入 `powershell` → **右键选择「以管理员身份运行」**
 
@@ -101,7 +108,7 @@ powershell -ExecutionPolicy Bypass -File .\fix_routes.ps1
 ```
 
 脚本会自动：
-1. 识别校园网和热点网卡（通过 IP 段自动匹配）
+1. 通过 IP 段自动识别校园网和热点网卡（无需手动配置网卡名）
 2. 设置热点跃点数 = 10（高优先级）
 3. 设置校园网跃点数 = 100（低优先级）
 4. 添加路由：服务器 IP 走校园网
@@ -116,7 +123,13 @@ powershell -ExecutionPolicy Bypass -File .\fix_routes.ps1
 
 ## 怎么判断 VPN 走的是热点还是校园网
 
-### 方法一：双击 monitor.bat（实时监控，推荐）
+### 方法一：运行 monitor.ps1（实时监控，推荐）
+
+以管理员身份运行 PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\monitor.ps1
+```
 
 每 3 秒刷新一次，看默认网关的最后一列（跃点数）：
 
@@ -131,9 +144,13 @@ powershell -ExecutionPolicy Bypass -File .\fix_routes.ps1
 
 按 **Ctrl + C** 退出监控。
 
-### 方法二：双击 check_network.bat
+### 方法二：运行 check_network.ps1
 
-快速看一眼就走，原理同上。
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check_network.ps1
+```
+
+快速看一眼就退出。
 
 ---
 
@@ -164,17 +181,17 @@ powershell -ExecutionPolicy Bypass -File .\restore.ps1
 | **重启电脑** | 配置持久化保存，重启后还在 |
 | **拔掉网线** | 学校服务器会连不上。插回网线自动恢复 |
 | **热点断开** | VPN/浏览器会断网。重新连上热点自动恢复 |
-| **换个热点** | 只要手机热点网段不变（如都是 192.168.114.x），配置不受影响 |
+| **换个热点** | 只要热点网段不变（如 192.168.114.x），配置不受影响 |
 | **跃点数被改乱** | 跑 **`fix_routes.ps1`** 重新修复 |
 | **VPN 开 TUN 模式** | 不影响，VPN 加密后的流量仍然走热点物理出口 |
-| **脚本报错** | 确保以管理员身份运行 PowerShell |
+| **脚本报错** | 确保以 **管理员身份** 运行 PowerShell |
 
 ## 常见问题
 
 **Q：开 VPN 后 SSH 断了怎么办？**
 A：说明 VPN 抢了路由。跑 `restore.ps1` 还原后，关掉 VPN，重新跑 `fix_routes.ps1`，再开 VPN。
 
-**Q：monitor.bat 里显示 8.8.8.8 timeout 但浏览器能上网？**
+**Q：monitor.ps1 里显示 8.8.8.8 timeout 但浏览器能上网？**
 A：这是正常的，有些 VPN 或热点会屏蔽 ping（ICMP 协议），不影响实际使用。
 
 **Q：SSH 连不上服务器但 ping 通了？**
