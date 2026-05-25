@@ -4,10 +4,12 @@
 
 需要同时满足两个矛盾的需求：
 
-1. **必须连校园网** → 才能访问学校实验室服务器（如 `YOUR_SERVER_IP`）
+1. **必须连校园网** → 才能访问学校实验室服务器
 2. **必须开 VPN** → 但学校规定校园网上开 VPN 会通报批评
 
 **矛盾点**：以前只能用校园网，但校园网不允许开 VPN。现在通过双网卡分流，让两个网络各司其职。
+
+> 本方案通过 PowerShell 脚本实现，自动识别网卡，任何语言版本的 Windows 都能用。
 
 ---
 
@@ -17,16 +19,16 @@
 
 | 网卡 | 连接 | 用途 |
 |------|------|------|
-| **有线网卡（以太网）** | 插墙上网口 → **校园网** | 访问学校服务器 |
-| **无线网卡（WLAN）** | 连你手机开的 **热点** | 浏览器、VPN 等其他所有流量 |
+| **有线网卡** | 插墙上网口 → **校园网** | 访问学校服务器 |
+| **无线网卡** | 连你手机开的 **热点** | 浏览器、VPN 等其他所有流量 |
 
 ### 软件层面：路由规则
 
 Windows 默认同时连两个网络时会随机或按优先级走，我们需要手动告诉系统：
 
 ```
-- 访问学校服务器（YOUR_SERVER_IP） → 走校园网有线（网关 YOUR_CAMPUS_GATEWAY）
-- 其他所有流量（包括 VPN）        → 走手机热点（网关 YOUR_HOTSPOT_GATEWAY）
+- 访问学校服务器 → 走校园网有线
+- 其他所有流量（包括 VPN） → 走手机热点
 ```
 
 这是通过两条配置实现的：
@@ -37,14 +39,14 @@ Windows 默认同时连两个网络时会随机或按优先级走，我们需要
 - 校园网设 `100`（低优先级，除非指定路由否则不走）
 
 **② 静态路由**
-- 精确指定 `YOUR_SERVER_IP` 必须走校园网网关
+- 精确指定服务器 IP 必须走校园网网关
 - 这条路由的优先级高于 VPN 添加的路由
 
 ### 为什么学校检测不到
 
 - 学校 DPI（深度包检测）检测的是**在校园网链路上出现 VPN 协议的握手特征**
-- 我们的 VPN 实际上跑在**手机热点**上，校园网有线网卡只传输普通的 SSH / ICMP 流量
-- 学校只能看到你在校园网上访问了 `YOUR_SERVER_IP`，完全看不到 VPN 流量
+- 我们的 VPN 实际上跑在**手机热点**上，校园网有线网卡只传输普通的 SSH 流量
+- 学校只能看到你在校园网上访问了服务器，完全看不到 VPN 流量
 
 ---
 
@@ -52,14 +54,14 @@ Windows 默认同时连两个网络时会随机或按优先级走，我们需要
 
 ```
 xiaoyuanwang_VPN/
-├── settings.bat          ← 【配置文件】所有 IP 地址都在这里改（已被 .gitignore 忽略，不上传）
-├── settings.example.bat  ← 【配置模板】复制为 settings.bat 后填入自己的 IP
-├── fix_routes.bat        ← 【配置脚本】设置跃点数 + 加路由（以管理员身份运行）
+├── settings.ps1          ← 【配置文件】填入你自己的 IP 地址（被 .gitignore 忽略，不上传）
+├── settings.example.ps1  ← 【配置模板】复制为 settings.ps1 后填入自己的 IP
+├── fix_routes.ps1        ← 【配置脚本】设置跃点数 + 加路由（以管理员身份运行）
+├── restore.ps1           ← 【还原脚本】一键还原所有设置（以管理员身份运行）
 ├── monitor.bat           ← 【监控脚本】实时查看网络走向（双击运行，Ctrl+C 退出）
 ├── check_network.bat     ← 【检测脚本】快速看一眼默认路由（双击运行）
-├── restore_routes.bat    ← 【还原脚本】一键还原所有设置（以管理员身份运行）
-├── .gitignore            ← Git 忽略规则（防止 settings.bat 被上传）
-└── README.md             ← 本文件
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -74,12 +76,12 @@ xiaoyuanwang_VPN/
 
 ### 第一步：修改配置（仅第一次）
 
-复制 `settings.example.bat` 为 `settings.bat`，用记事本打开，填入你自己的 IP：
+复制 `settings.example.ps1` 为 `settings.ps1`，用记事本打开，填入你自己的 IP：
 
-```bat
-set SERVER_IP=YOUR_SERVER_IP           ← 改成你的服务器 IP
-set CAMPUS_GATEWAY=YOUR_CAMPUS_GATEWAY ← 改成你校园网的网关
-set CAMPUS_SUBNET=YOUR_CAMPUS_SUBNET
+```powershell
+$SERVER_IP = "YOUR_SERVER_IP"              # 改成你的服务器 IP
+$CAMPUS_GATEWAY = "YOUR_CAMPUS_GATEWAY"    # 改成你校园网的网关
+$CAMPUS_SUBNET = "YOUR_CAMPUS_SUBNET"
 ```
 
 ### 第二步：插网线，连热点
@@ -89,16 +91,20 @@ set CAMPUS_SUBNET=YOUR_CAMPUS_SUBNET
 Wi-Fi    → 连手机热点（不要连校园 Wi-Fi）
 ```
 
-### 第三步：运行 fix_routes.bat
+### 第三步：以管理员身份运行 PowerShell
 
-右键 **`fix_routes.bat`** → **以管理员身份运行**
+按 `Win` 键 → 输入 `powershell` → **右键选择「以管理员身份运行」**
 
-脚本会自动完成：
-1. 设置热点跃点数 = 10（高优先级）
-2. 设置校园网跃点数 = 100（低优先级）
-3. 添加路由：服务器 IP 走校园网
+```powershell
+cd 你的文件夹路径
+powershell -ExecutionPolicy Bypass -File .\fix_routes.ps1
+```
 
-看到 `Done.` 就完成了。
+脚本会自动：
+1. 识别校园网和热点网卡（通过 IP 段自动匹配）
+2. 设置热点跃点数 = 10（高优先级）
+3. 设置校园网跃点数 = 100（低优先级）
+4. 添加路由：服务器 IP 走校园网
 
 ### 第四步：正常使用
 
@@ -121,7 +127,7 @@ Wi-Fi    → 连手机热点（不要连校园 Wi-Fi）
 
 判断标准：
 - **热点跃点数小（10）** → ✅ VPN 走热点，安全
-- **校园网跃点数小** → ⚠️ 有风险，跑 `fix_routes.bat` 修复
+- **校园网跃点数小** → ⚠️ 有风险，跑 `fix_routes.ps1` 修复
 
 按 **Ctrl + C** 退出监控。
 
@@ -131,72 +137,23 @@ Wi-Fi    → 连手机热点（不要连校园 Wi-Fi）
 
 ---
 
-## 热点断了会泄漏 VPN 流量吗？
+## 一键还原
 
-**会，有一个短暂的风险窗口。**
-
-当手机热点突然断开时：
-1. 热点的默认路由消失
-2. VPN 可能还开着没反应过来
-3. 校园网的默认路由还在，VPN 流量会短暂漏到校园网上
-
-这个风险很小（热点断后 VPN 很快也断了），但有下面两种处理方式：
-
-### 方式一：不处理（简单省事）
-
-默认配置已经够安全了，热点断开后 VPN 几秒内也会断，泄漏窗口极短。
-
-### 方式二：开启防泄漏模式（手动挡）
-
-> 开启后，热点断了 VPN 就直接发不出去，0 泄漏。
-
-以管理员身份打开 **PowerShell**（Win 键 → 输入 powershell → 右键以管理员身份运行），粘贴以下命令（替换 YOUR_ 为你的实际 IP）：
+以管理员身份运行 PowerShell：
 
 ```powershell
-# 1. 添加校园网子网路由
-route add YOUR_CAMPUS_SUBNET mask 255.255.255.0 YOUR_CAMPUS_GATEWAY -p
-
-# 2. 删除校园网的默认路由（防泄漏的关键）
-Get-NetRoute -DestinationPrefix "0.0.0.0/0" -AddressFamily IPv4 | Where-Object { $_.NextHop -eq "YOUR_CAMPUS_GATEWAY" } | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
-
-# 3. 禁止 DHCP 自动恢复校园网默认路由
-Set-NetIPInterface -InterfaceAlias "以太网" -IgnoreDefaultRoutes "Enabled" -ErrorAction SilentlyContinue
+powershell -ExecutionPolicy Bypass -File .\restore.ps1
 ```
 
-**还原方法**：右键以管理员身份运行 `restore_routes.bat`，或者粘贴以下命令：
-
-```powershell
-# 1. 重新允许 DHCP 加路由
-Set-NetIPInterface -InterfaceAlias "以太网" -IgnoreDefaultRoutes "Disabled" -ErrorAction SilentlyContinue
-
-# 2. 删掉我们加的路由
-route delete YOUR_SERVER_IP
-route delete YOUR_CAMPUS_SUBNET
-
-# 3. 恢复校园网默认路由
-route add 0.0.0.0 mask 0.0.0.0 YOUR_CAMPUS_GATEWAY -p
-
-# 4. 恢复自动跃点数
-Set-NetIPInterface -InterfaceAlias "WLAN" -InterfaceMetric "Automatic" -ErrorAction SilentlyContinue
-Set-NetIPInterface -InterfaceAlias "以太网" -InterfaceMetric "Automatic" -ErrorAction SilentlyContinue
-```
-
----
-
-## 还原所有设置
-
-右键 **`restore_routes.bat`** → **以管理员身份运行**
-
-会执行：
-1. 删除服务器的路由规则
-2. 恢复所有网卡为自动跃点数
-3. 恢复校园网默认路由
+会删除服务器路由、恢复所有网卡为自动跃点数。
 
 ---
 
 ## 换电脑或换 IP 怎么用
 
-复制整个文件夹到新电脑，编辑 `settings.bat` 填上新环境的 IP，然后跑 `fix_routes.bat` 即可。
+复制整个文件夹到新电脑，编辑 `settings.ps1` 填上新环境的 IP，然后跑 `fix_routes.ps1` 即可。
+
+脚本会自动根据 IP 段识别校园网和热点网卡，不需要手动改网卡名。
 
 ---
 
@@ -207,15 +164,15 @@ Set-NetIPInterface -InterfaceAlias "以太网" -InterfaceMetric "Automatic" -Err
 | **重启电脑** | 配置持久化保存，重启后还在 |
 | **拔掉网线** | 学校服务器会连不上。插回网线自动恢复 |
 | **热点断开** | VPN/浏览器会断网。重新连上热点自动恢复 |
-| **换个热点** | 只要手机热点网段不变，配置不受影响 |
-| **跃点数被改乱** | 跑 **`fix_routes.bat`** 重新修复 |
+| **换个热点** | 只要手机热点网段不变（如都是 192.168.114.x），配置不受影响 |
+| **跃点数被改乱** | 跑 **`fix_routes.ps1`** 重新修复 |
 | **VPN 开 TUN 模式** | 不影响，VPN 加密后的流量仍然走热点物理出口 |
-| **IPv6** | 不影响，IPv4 和 IPv6 路由独立 |
+| **脚本报错** | 确保以管理员身份运行 PowerShell |
 
 ## 常见问题
 
 **Q：开 VPN 后 SSH 断了怎么办？**
-A：说明 VPN 抢了路由。跑 `restore_routes.bat` 还原后，关掉 VPN，重新跑 `fix_routes.bat`，再开 VPN。
+A：说明 VPN 抢了路由。跑 `restore.ps1` 还原后，关掉 VPN，重新跑 `fix_routes.ps1`，再开 VPN。
 
 **Q：monitor.bat 里显示 8.8.8.8 timeout 但浏览器能上网？**
 A：这是正常的，有些 VPN 或热点会屏蔽 ping（ICMP 协议），不影响实际使用。
@@ -224,4 +181,4 @@ A：这是正常的，有些 VPN 或热点会屏蔽 ping（ICMP 协议），不�
 A：检查服务器 SSH 服务是否在运行（`systemctl status ssh`），或者校园网有线是否需要网页认证。
 
 **Q：手机热点流量够用吗？**
-A：VPN、浏览器、微信等走热点流量。学校服务器访问走校园网有线，不消耗热点流量。只开 VPN 查资料的话流量消耗不大。
+A：VPN、浏览器、微信等走热点流量。学校服务器访问走校园网有线，不消耗热点流量。
