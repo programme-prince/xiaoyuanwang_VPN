@@ -1,6 +1,4 @@
 @echo off
-chcp 65001 >nul
-
 echo ============ Network Status ============
 echo.
 route print | findstr "0.0.0.0          0.0.0.0"

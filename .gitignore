@@ -1,2 +1,3 @@
-# Ignore real config file with real IPs
+# Ignore real config files
 settings.bat
+settings.ps1
